@@ -14,6 +14,8 @@ if not vim.uv.fs_stat(lazypath) then
 end
 
 vim.opt.rtp:prepend(lazypath)
+vim.cmd('packadd termdebug')
+
 
 local lazy_config = require "configs.lazy"
 
@@ -39,3 +41,4 @@ require "autocmds"
 vim.schedule(function()
   require "mappings"
 end)
+
