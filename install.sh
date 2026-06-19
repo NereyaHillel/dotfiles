@@ -42,8 +42,7 @@ fi
 
 echo -e "${YELLOW}=> Installing core dependencies...${NC}"
 # Common packages for both environments
-PACKAGES="zsh tmux neovim git curl wget ripgrep"
-
+PACKAGES="zsh tmux neovim git curl wget ripgrep direnv"
 if [ "$IS_TERMUX" = true ]; then
     # Termux specific: uses termux-api for clipboard instead of xclip
     PACKAGES="$PACKAGES build-essential termux-api"
