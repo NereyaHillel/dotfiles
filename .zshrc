@@ -11,27 +11,36 @@ ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 [ ! -d $ZINIT_HOME/.git ] && git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
 source "${ZINIT_HOME}/zinit.zsh"
 
-# Load essential Oh My Zsh libraries (Snippets)
+# -> STEP 1: Add extra completions to the system
+zinit light zsh-users/zsh-completions
+
+# -> STEP 2: Start the completion engine natively (This fixes the file/folder bug!)
+autoload -Uz compinit
+compinit
+zmodload zsh/complist
+
+# -> STEP 3: Configure the interactive Tab Menu
+zstyle ':completion:*' menu select=2
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+bindkey -M menuselect '^[[Z' reverse-menu-complete
+
+# -> STEP 4: Load plugins that hook into the completion engine
 zinit snippet OMZL::history.zsh
 zinit snippet OMZL::directories.zsh
-zinit snippet OMZL::completion.zsh
 zinit snippet OMZL::key-bindings.zsh
 zinit snippet OMZL::theme-and-appearance.zsh
 
-# Load Oh My Zsh plugins you previously used
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::dirhistory
 zinit snippet OMZP::copypath
 zinit snippet OMZP::copyfile
 
-# Modern, fast plugins
+# -> STEP 5: Visuals load absolutely last
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
-zinit light zsh-users/zsh-completions
-
-# Load Powerlevel10k theme natively
 zinit ice depth=1; zinit light romkatv/powerlevel10k
+
 
 # ==========================
 # 2. USER ENVIRONMENT
@@ -49,6 +58,7 @@ export SAVEHIST=10000
 export HISTFILE=~/.zsh_history
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
+
 
 # ==========================
 # 3. ALIASES & FUNCTIONS
@@ -107,11 +117,13 @@ mkproject() {
     esac
 }
 
+
 # ==========================
 # 4. FINAL EXECUTION
 # ==========================
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# Background crond (Fixed from blocking startup)
-#(pgrep -x "crond" >/dev/null || crond) &> /dev/null &
+# Background crond
+(pgrep -x "crond" >/dev/null || crond) &> /dev/null &
+
