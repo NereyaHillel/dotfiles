@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # Exit immediately if a command exits with a non-zero status
 set -e
 
@@ -41,15 +40,16 @@ else
 fi
 
 echo -e "${YELLOW}=> Installing core dependencies...${NC}"
-# Common packages for both environments
-PACKAGES="zsh tmux neovim git curl wget ripgrep direnv"
+# Added fzf, nodejs, and python to support your .zshrc and Copilot
+PACKAGES="zsh tmux neovim git curl wget ripgrep direnv fzf nodejs python"
+
 if [ "$IS_TERMUX" = true ]; then
-    # Termux specific: uses termux-api for clipboard instead of xclip
-    PACKAGES="$PACKAGES build-essential termux-api"
+    # Added clang and make for native Termux module compiling (LSPs/treesitter)
+    PACKAGES="$PACKAGES build-essential termux-api clang make"
     pkg install -y $PACKAGES
 else
     # Linux specific: uses xclip for clipboard and requires sudo
-    PACKAGES="$PACKAGES build-essential xclip"
+    PACKAGES="$PACKAGES build-essential xclip python3-venv"
     sudo apt install -y $PACKAGES
 fi
 echo -e "${GREEN}[✔] Dependencies installed.${NC}"
@@ -59,11 +59,12 @@ echo -e "${GREEN}[✔] Dependencies installed.${NC}"
 # ==========================================
 echo -e "\n${YELLOW}=> Setting Zsh as default shell...${NC}"
 if [ "$IS_TERMUX" = true ]; then
-    chsh -s zsh
+    # The || true prevents set -e from killing the script if chsh returns a warning
+    chsh -s zsh || true
     echo -e "${GREEN}[✔] Zsh set as default shell.${NC}"
 else
     if [ "$SHELL" != "$(which zsh)" ]; then
-        chsh -s "$(which zsh)"
+        chsh -s "$(which zsh)" || true
         echo -e "${GREEN}[✔] Zsh set as default shell.${NC}"
     else
         echo -e "${GREEN}[✔] Zsh is already the default shell.${NC}"
@@ -100,7 +101,7 @@ echo -e "\n${YELLOW}=> Creating symlinks...${NC}"
 link_file() {
     local src=$1
     local dst=$2
-    
+
     # If the destination exists and is NOT a symlink, back it up
     if [ -e "$dst" ] && [ ! -L "$dst" ]; then
         echo -e "${YELLOW}   Backing up existing $dst to ${dst}.bak${NC}"
@@ -109,7 +110,7 @@ link_file() {
     elif [ -L "$dst" ]; then
         rm "$dst"
     fi
-    
+
     ln -sf "$src" "$dst"
     echo -e "${GREEN}[✔] Linked $dst -> $src${NC}"
 }
@@ -128,5 +129,6 @@ echo -e "\n${BLUE}=======================================${NC}"
 echo -e "${GREEN}    Installation Complete!    ${NC}"
 echo -e "${BLUE}=======================================${NC}"
 echo -e "=> ${YELLOW}NOTE 1:${NC} Restart your terminal or type 'exec zsh' to trigger the initial Zinit compilation."
-echo -e "=> ${YELLOW}NOTE 2:${NC} Open tmux and press 'Prefix + I' to install tmux plugins (like vim-tmux-navigator)."
-echo -e "=> ${YELLOW}NOTE 3:${NC} Open Neovim to let Lazy/Packer automatically bootstrap your tools."
+echo -e "=> ${YELLOW}NOTE 2:${NC} Open tmux and press 'Prefix + I' to install tmux plugins."
+echo -e "=> ${YELLOW}NOTE 3:${NC} Open Neovim to let Lazy automatically bootstrap your tools."
+
