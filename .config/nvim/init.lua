@@ -3,9 +3,7 @@ vim.g.mapleader = " "
 
 -- Smart OS detection for Copilot's Node path
 if vim.fn.isdirectory("/data/data/com.termux") == 1 then
-  vim.g.copilot_node_command = "/data/data/com.termux/files/usr/bin/node"
 else
-  vim.g.copilot_node_command = "node" -- Standard Linux uses the default PATH
 end
 
 vim.opt.tabstop = 8 -- Number of spaces a <Tab> in the file counts for

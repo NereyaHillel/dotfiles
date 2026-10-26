@@ -29,28 +29,28 @@ return {
         text = "🔴",
         texthl = "DiagnosticError",
         linehl = "",
-        numhl = ""
+        numhl = "",
       })
     end,
   },
 
-    -- Official GitHub Copilot (Resilient on Termux)
   {
- "github/copilot.vim",
-    lazy = false,
-    init = function()
-      -- THIS is the magic fix: Tell Copilot where Node is BEFORE it loads
-      vim.g.copilot_node_command = "/data/data/com.termux/files/usr/bin/node"
-      
-      -- Disable the default Tab keymap to protect NvChad's autocomplete menu
+    "github/copilot.vim",
+    event = "InsertEnter",
+    config = function()
+      -- Keep Copilot ghost text running automatically as you type
+      vim.g.copilot_enabled = true
+
+      -- Take full control of Tab so the completion menu cannot steal it
       vim.g.copilot_no_tab_map = true
       vim.g.copilot_assume_mapped = true
-    end,
-    config = function()
-      -- Map Ctrl+l (lowercase L) to accept the suggestion
-      vim.cmd('imap <silent><script><expr> <C-l> copilot#Accept("\\<CR>")')
+
+      -- Tab accepts Copilot ghost text (or inserts a regular Tab if no suggestion is shown)
+      vim.keymap.set("i", "<Tab>", 'copilot#Accept("\\<CR>")', {
+        expr = true,
+        replace_keycodes = false,
+        silent = true,
+      })
     end,
   },
-
 }
-
