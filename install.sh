@@ -52,11 +52,11 @@ else
 fi
 
 info "Installing core dependencies..."
-COMMON_PACKAGES="zsh tmux neovim git curl wget ripgrep direnv fzf nodejs python"
+COMMON_PACKAGES="zsh tmux neovim git curl wget ripgrep direnv fzf nodejs"
 
 if [ "$IS_TERMUX" = true ]; then
     # Termux packages both gh and lazygit natively
-    TERMUX_PACKAGES="$COMMON_PACKAGES build-essential termux-api clang make fd bat gh lazygit"
+    TERMUX_PACKAGES="$COMMON_PACKAGES python build-essential termux-api clang make fd bat gh lazygit"
     pkg install -y $TERMUX_PACKAGES
 
     if [ ! -d "$HOME/storage" ]; then
@@ -65,7 +65,7 @@ if [ "$IS_TERMUX" = true ]; then
     fi
 else
     # Linux / WSL specific packages
-    LINUX_PACKAGES="$COMMON_PACKAGES build-essential xclip python3-venv python3-pip fd-find bat tar"
+    LINUX_PACKAGES="$COMMON_PACKAGES python3 python-is-python3 build-essential xclip python3-venv python3-pip fd-find bat tar"
     sudo apt-get install -y $LINUX_PACKAGES
 
     # Normalize Ubuntu/Debian binary names (fdfind -> fd, batcat -> bat)
