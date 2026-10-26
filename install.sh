@@ -201,13 +201,40 @@ link_file "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
 link_file "$DOTFILES_DIR/.tmux.conf" "$HOME/.tmux.conf"
 link_file "$DOTFILES_DIR/.config/nvim" "$HOME/.config/nvim"
 
-# Optional: Link lazygit config if you store one in your dotfiles
 if [ -e "$DOTFILES_DIR/.config/lazygit" ]; then
     link_file "$DOTFILES_DIR/.config/lazygit" "$HOME/.config/lazygit"
 fi
 
 # ==========================================
-# 6. Automated Plugin Bootstrapping
+# 6. Neovim Copilot Configuration
+# ==========================================
+echo ""
+info "Checking Neovim GitHub Copilot setup..."
+NVIM_PLUGINS_DIR="$DOTFILES_DIR/.config/nvim/lua/plugins"
+mkdir -p "$NVIM_PLUGINS_DIR"
+
+COPILOT_CONF="$NVIM_PLUGINS_DIR/copilot.lua"
+if [ ! -f "$COPILOT_CONF" ]; then
+    cat << 'EOF' > "$COPILOT_CONF"
+return {
+  "github/copilot.vim",
+  event = "InsertEnter",
+  config = function()
+    -- Disable default tab map to prevent conflicts
+    vim.g.copilot_no_tab_map = true
+    
+    -- Map Tab to accept Copilot suggestions
+    vim.api.nvim_set_keymap("i", "<Tab>", 'copilot#Accept("<CR>")', { silent = true, expr = true })
+  end,
+}
+EOF
+    success "Injected copilot.lua into Neovim config."
+else
+    success "Copilot configuration already exists."
+fi
+
+# ==========================================
+# 7. Automated Plugin Bootstrapping
 # ==========================================
 echo ""
 info "Bootstrapping Tmux plugins via TPM..."
@@ -224,10 +251,11 @@ if command -v nvim >/dev/null 2>&1 && [ -e "$HOME/.config/nvim" ]; then
 fi
 
 # ==========================================
-# 7. Completion
+# 8. Completion
 # ==========================================
 echo -e "\n${BLUE}=======================================${NC}"
 echo -e "${GREEN}        Installation Complete!         ${NC}"
 echo -e "${BLUE}=======================================${NC}"
 echo -e "=> ${YELLOW}Next step 1:${NC} Run 'gh auth login' to authenticate GitHub CLI & Git credentials."
 echo -e "=> ${YELLOW}Next step 2:${NC} Run 'exec zsh' to enter your configured shell."
+echo -e "=> ${YELLOW}Next step 3:${NC} Open Neovim and run ':Copilot setup' to authenticate."
