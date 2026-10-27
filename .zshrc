@@ -128,3 +128,4 @@ mkproject() {
 (pgrep -x "crond" >/dev/null || crond) &> /dev/null &
 
 export COPILOT_NODE_COMMAND="/data/data/com.termux/files/usr/bin/node"
+setopt interactivecomments

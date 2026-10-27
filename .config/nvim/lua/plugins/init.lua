@@ -1,4 +1,49 @@
 return {
+  -- Syntax Highlighting (Treesitter)
+  {
+    "nvim-treesitter/nvim-treesitter",
+    event = { "BufReadPost", "BufNewFile" },
+    cmd = { "TSInstall", "TSBufEnable", "TSBufDisable", "TSModuleInfo" },
+    build = ":TSUpdate",
+    opts = {
+      ensure_installed = {
+        -- Systems & Embedded
+        "c",
+        "cpp",
+        "rust",
+        "make",
+        "cmake",
+        -- Scripting & Backend
+        "python",
+        "bash",
+        "sql",
+        -- Neovim & Configs
+        "lua",
+        "luadoc",
+        "vim",
+        "vimdoc",
+        "json",
+        "yaml",
+        "toml",
+        "markdown",
+        "markdown_inline",
+        -- Web
+        "javascript",
+        "typescript",
+        "html",
+        "css",
+      },
+      auto_install = true,
+      highlight = {
+        enable = true,
+        use_languagetree = true,
+      },
+      indent = {
+        enable = true,
+      },
+    },
+  },
+
   -- Formatter (Auto-formats code on save)
   {
     "stevearc/conform.nvim",
@@ -64,7 +109,7 @@ return {
       conf.mapping["<C-Space>"] = cmp.mapping.complete()
       conf.mapping["<C-@>"] = cmp.mapping.complete()
 
-      -- 3. Confirm item with Enter
+      -- 3. Confirm highlighted item ONLY when pressing Enter
       conf.mapping["<CR>"] = cmp.mapping.confirm({
         behavior = cmp.ConfirmBehavior.Insert,
         select = true,
@@ -73,17 +118,17 @@ return {
       -- 4. Close menu with Ctrl-e
       conf.mapping["<C-e>"] = cmp.mapping.abort()
 
-      -- 5. Unbind Tab/S-Tab from nvim-cmp's internal wrapper so it doesn't corrupt Copilot's keycodes
+      -- 5. Remove nvim-cmp's default Tab/S-Tab so our unified handler controls them
       conf.mapping["<Tab>"] = nil
       conf.mapping["<S-Tab>"] = nil
 
-      -- 6. Native <expr> Smart Tab:
-      --    - If Ctrl-Space menu is open -> scroll down through suggestions
-      --    - If menu is closed -> natively evaluate copilot#Accept() without nvim_feedkeys
+      -- 6. Smart Tab:
+      --    - Menu open: ONLY move highlight bar down (SelectBehavior.Select) without inserting
+      --    - Menu closed: Accept Copilot ghost text
       vim.keymap.set("i", "<Tab>", function()
         if cmp.visible() then
           vim.schedule(function()
-            cmp.select_next_item()
+            cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
           end)
           return ""
         end
@@ -93,11 +138,11 @@ return {
         return "\t"
       end, { expr = true, replace_keycodes = false, silent = true })
 
-      -- 7. Native <expr> Smart Shift-Tab: scroll up when Ctrl-Space menu is open
+      -- 7. Smart Shift-Tab: ONLY move highlight bar up without inserting
       vim.keymap.set("i", "<S-Tab>", function()
         if cmp.visible() then
           vim.schedule(function()
-            cmp.select_prev_item()
+            cmp.select_prev_item({ behavior = cmp.SelectBehavior.Select })
           end)
           return ""
         end
