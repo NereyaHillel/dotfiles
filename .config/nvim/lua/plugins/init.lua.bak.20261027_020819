@@ -1,0 +1,75 @@
+return {
+  {
+    "stevearc/conform.nvim",
+    event = "BufWritePre",
+    config = function()
+      require "configs.conform"
+    end,
+  },
+  {
+    "neovim/nvim-lspconfig",
+    config = function()
+      require("nvchad.configs.lspconfig").defaults()
+      require "configs.lspconfig"
+    end,
+  },
+  {
+    "mfussenegger/nvim-dap",
+    config = function()
+      vim.keymap.set("n", "<leader>db", "<cmd>DapToggleBreakpoint<CR>", { desc = "Toggle Breakpoint" })
+      vim.fn.sign_define("DapBreakpoint", { text = "🔴", texthl = "DiagnosticError", linehl = "", numhl = "" })
+    end,
+  },
+  {
+    "github/copilot.vim",
+    event = "InsertEnter",
+    init = function()
+      vim.g.copilot_enabled = true
+      vim.g.copilot_no_tab_map = true
+      vim.g.copilot_assume_mapped = true
+      if vim.fn.isdirectory("/data/data/com.termux") == 1 then
+        vim.g.copilot_node_command = vim.fn.expand("~/.config/nvim/copilot_node.sh")
+      else
+        vim.g.copilot_node_command = vim.fn.exepath("node")
+      end
+    end,
+  },
+  {
+    "hrsh7th/nvim-cmp",
+    opts = function(_, conf)
+      local cmp = require("cmp")
+      conf.completion = conf.completion or {}
+      conf.completion.autocomplete = false
+
+      conf.mapping["<C-Space>"] = cmp.mapping.complete()
+      conf.mapping["<C-@>"] = cmp.mapping.complete()
+      conf.mapping["<CR>"] = cmp.mapping.confirm({ behavior = cmp.ConfirmBehavior.Insert, select = true })
+      conf.mapping["<C-e>"] = cmp.mapping.abort()
+
+      conf.mapping["<Tab>"] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          cmp.select_next_item()
+        elseif vim.fn.exists("*copilot#Accept") == 1 then
+          local copilot_keys = vim.fn["copilot#Accept"]("")
+          if copilot_keys ~= "" then
+            vim.api.nvim_feedkeys(copilot_keys, "i", true)
+          else
+            fallback()
+          end
+        else
+          fallback()
+        end
+      end, { "i", "s" })
+
+      conf.mapping["<S-Tab>"] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          cmp.select_prev_item()
+        else
+          fallback()
+        end
+      end, { "i", "s" })
+
+      return conf
+    end,
+  },
+}
