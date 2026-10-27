@@ -1,50 +1,121 @@
 return {
-  -- Syntax Highlighting (Treesitter)
   {
     "nvim-treesitter/nvim-treesitter",
-    event = { "BufReadPost", "BufNewFile" },
-    cmd = { "TSInstall", "TSBufEnable", "TSBufDisable", "TSModuleInfo" },
+    lazy = false,
+    event = function()
+      return {}
+    end,
+    branch = vim.fn.has("nvim-0.12") == 1 and "main" or "master",
     build = ":TSUpdate",
-    opts = {
-      ensure_installed = {
-        -- Systems & Embedded
-        "c",
-        "cpp",
-        "rust",
-        "make",
-        "cmake",
-        -- Scripting & Backend
-        "python",
-        "bash",
-        "sql",
-        -- Neovim & Configs
-        "lua",
-        "luadoc",
-        "vim",
-        "vimdoc",
-        "json",
-        "yaml",
-        "toml",
-        "markdown",
-        "markdown_inline",
-        -- Web
-        "javascript",
-        "typescript",
-        "html",
-        "css",
-      },
-      auto_install = true,
-      highlight = {
-        enable = true,
-        use_languagetree = true,
-      },
-      indent = {
-        enable = true,
-      },
-    },
+    config = function()
+      -- 1. Add nvim-treesitter/runtime to rtp so Neovim 0.12 finds queries/python/highlights.scm
+      local ts_runtime = vim.fn.stdpath("data") .. "/lazy/nvim-treesitter/runtime"
+      if vim.fn.isdirectory(ts_runtime) == 1 then
+        vim.opt.rtp:prepend(ts_runtime)
+      end
+
+      -- 2. Compile (if empty) and load NvChad base46 Gruvbox syntax & treesitter highlights
+      if vim.g.base46_cache then
+        if vim.fn.getfsize(vim.g.base46_cache .. "syntax") <= 10
+          or vim.fn.getfsize(vim.g.base46_cache .. "treesitter") <= 10 then
+          pcall(function()
+            require("base46").load_all_highlights()
+          end)
+        end
+        for _, hl_file in ipairs({ "defaults", "statusline", "devicons", "syntax", "treesitter", "lsp", "cmp" }) do
+          local path = vim.g.base46_cache .. hl_file
+          if vim.fn.filereadable(path) == 1 and vim.fn.getfsize(path) > 0 then
+            pcall(dofile, path)
+          end
+        end
+      end
+
+      vim.cmd("syntax enable")
+
+      -- 3. Exclude parsers already bundled with Neovim 0.12 (vimdoc, lua, vim, c, query, markdown)
+      local languages = {
+        "python", "cpp", "rust", "make", "cmake",
+        "bash", "sql", "json", "yaml", "toml",
+        "javascript", "typescript", "html", "css",
+      }
+
+      local has_configs, ts_configs = pcall(require, "nvim-treesitter.configs")
+      if has_configs then
+        ts_configs.setup({
+          ensure_installed = languages,
+          auto_install = true,
+          highlight = { enable = true, use_languagetree = true },
+          indent = { enable = true },
+        })
+      else
+        local has_ts, ts = pcall(require, "nvim-treesitter")
+        if has_ts then
+          if type(ts.setup) == "function" then
+            pcall(ts.setup)
+          end
+          if type(ts.install) == "function" and #vim.api.nvim_list_uis() > 0 then
+            local missing = {}
+            for _, lang in ipairs(languages) do
+              if #vim.api.nvim_get_runtime_file("parser/" .. lang .. ".*", false) == 0 then
+                table.insert(missing, lang)
+              end
+            end
+            if #missing > 0 then
+              local lock_dir = vim.fn.expand("~/.cache/tree-sitter/lock")
+              if vim.fn.isdirectory(lock_dir) == 1 then
+                vim.fn.delete(lock_dir, "rf")
+              end
+              pcall(ts.install, missing)
+            end
+          end
+        end
+      end
+
+      -- 4. Highlight helper: only start Treesitter if BOTH parser and highlights.scm exist;
+      --    otherwise enable Gruvbox regex syntax for the filetype (e.g. "python") immediately.
+      local function highlight_buf(bufnr)
+        if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+          return
+        end
+        if vim.bo[bufnr].buftype ~= "" then
+          return
+        end
+        local ft = vim.bo[bufnr].filetype
+        if not ft or ft == "" then
+          return
+        end
+
+        local lang = vim.treesitter.language.get_lang(ft) or ft
+        local has_parser = pcall(vim.treesitter.language.add, lang)
+        local has_query = false
+        if has_parser then
+          local ok_q, q = pcall(vim.treesitter.query.get, lang, "highlights")
+          has_query = ok_q and q ~= nil
+        end
+
+        if has_parser and has_query then
+          if pcall(vim.treesitter.start, bufnr, lang) then
+            return
+          end
+        end
+
+        vim.bo[bufnr].syntax = ft
+      end
+
+      vim.api.nvim_create_autocmd({ "FileType", "BufReadPost", "BufNewFile" }, {
+        group = vim.api.nvim_create_augroup("CrossPlatformTreesitter", { clear = true }),
+        callback = function(args)
+          highlight_buf(args.buf)
+        end,
+      })
+
+      -- 5. Immediately highlight any buffers that opened before nvim-treesitter loaded
+      for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+        highlight_buf(bufnr)
+      end
+    end,
   },
 
-  -- Formatter (Auto-formats code on save)
   {
     "stevearc/conform.nvim",
     event = "BufWritePre",
@@ -53,7 +124,6 @@ return {
     end,
   },
 
-  -- Language Servers (Autocomplete, error checking)
   {
     "neovim/nvim-lspconfig",
     config = function()
@@ -62,7 +132,6 @@ return {
     end,
   },
 
-  -- Debugger (For Breakpoints)
   {
     "mfussenegger/nvim-dap",
     config = function()
@@ -76,7 +145,6 @@ return {
     end,
   },
 
-  -- GitHub Copilot (Cross-Platform: Termux Shim + WSL/Linux Native Node)
   {
     "github/copilot.vim",
     lazy = false,
@@ -95,36 +163,27 @@ return {
     end,
   },
 
-  -- Autocompletion (nvim-cmp): Manual Ctrl-Space popup + Smart Tab handoff
   {
     "hrsh7th/nvim-cmp",
     opts = function(_, conf)
       local cmp = require("cmp")
 
-      -- 1. Disable automatic popup while typing
       conf.completion = conf.completion or {}
       conf.completion.autocomplete = false
 
-      -- 2. Trigger suggestion menu ONLY on Ctrl-Space (and <C-@> for Termux/WSL/Tmux)
       conf.mapping["<C-Space>"] = cmp.mapping.complete()
       conf.mapping["<C-@>"] = cmp.mapping.complete()
 
-      -- 3. Confirm highlighted item ONLY when pressing Enter
       conf.mapping["<CR>"] = cmp.mapping.confirm({
         behavior = cmp.ConfirmBehavior.Insert,
         select = true,
       })
 
-      -- 4. Close menu with Ctrl-e
       conf.mapping["<C-e>"] = cmp.mapping.abort()
 
-      -- 5. Remove nvim-cmp's default Tab/S-Tab so our unified handler controls them
       conf.mapping["<Tab>"] = nil
       conf.mapping["<S-Tab>"] = nil
 
-      -- 6. Smart Tab:
-      --    - Menu open: ONLY move highlight bar down (SelectBehavior.Select) without inserting
-      --    - Menu closed: Accept Copilot ghost text
       vim.keymap.set("i", "<Tab>", function()
         if cmp.visible() then
           vim.schedule(function()
@@ -138,7 +197,6 @@ return {
         return "\t"
       end, { expr = true, replace_keycodes = false, silent = true })
 
-      -- 7. Smart Shift-Tab: ONLY move highlight bar up without inserting
       vim.keymap.set("i", "<S-Tab>", function()
         if cmp.visible() then
           vim.schedule(function()
