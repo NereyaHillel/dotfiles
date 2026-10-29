@@ -30,7 +30,7 @@ info "Detecting environment..."
 IS_TERMUX=false
 IS_WSL=false
 
-if [[ "${PREFIX:-}" == *"com.termux"* ]]; then
+if [[ "${PREFIX:-}" == *"com.termux"* ]] || [ -d "/data/data/com.termux" ]; then
     IS_TERMUX=true
     success "Termux environment detected."
 elif grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null; then
@@ -52,11 +52,11 @@ else
 fi
 
 info "Installing core dependencies..."
-COMMON_PACKAGES="zsh tmux neovim git curl wget ripgrep direnv fzf nodejs python"
+COMMON_PACKAGES="zsh tmux git curl wget ripgrep direnv fzf unzip tar"
 
 if [ "$IS_TERMUX" = true ]; then
-    # Termux packages both gh and lazygit natively
-    TERMUX_PACKAGES="$COMMON_PACKAGES build-essential termux-api clang make fd bat gh lazygit"
+    # Termux packages gh, lazygit, neovim, nodejs (v22+), python, and tree-sitter natively
+    TERMUX_PACKAGES="$COMMON_PACKAGES neovim nodejs python build-essential termux-api clang make fd bat gh lazygit tree-sitter"
     pkg install -y $TERMUX_PACKAGES
 
     if [ ! -d "$HOME/storage" ]; then
@@ -64,9 +64,38 @@ if [ "$IS_TERMUX" = true ]; then
         termux-setup-storage || true
     fi
 else
-    # Linux / WSL specific packages
-    LINUX_PACKAGES="$COMMON_PACKAGES build-essential xclip python3-venv python3-pip fd-find bat tar"
+    # Linux / WSL specific packages (uses python3 instead of legacy 'python' package name)
+    LINUX_PACKAGES="$COMMON_PACKAGES software-properties-common build-essential xclip python3 python3-venv python3-pip fd-find bat"
     sudo apt-get install -y $LINUX_PACKAGES
+
+    # Ensure Neovim >= 0.11 is installed (Ubuntu default apt repo has old Neovim)
+    NVIM_MINOR=0
+    if command -v nvim >/dev/null 2>&1; then
+        NVIM_MINOR="$(nvim --version | head -n1 | sed -E 's/.*v0\.([0-9]+).*/\1/' || echo 0)"
+    fi
+    if [ "${NVIM_MINOR:-0}" -lt 11 ]; then
+        info "Installing modern Neovim via ppa:neovim-ppa/unstable..."
+        sudo add-apt-repository -y ppa:neovim-ppa/unstable
+        sudo apt-get update -y
+        sudo apt-get install -y neovim
+    fi
+
+    # Ensure Node.js >= 22 is installed (required by GitHub Copilot)
+    NODE_MAJOR=0
+    if command -v node >/dev/null 2>&1; then
+        NODE_MAJOR="$(node -v | sed -E 's/^v([0-9]+).*/\1/' || echo 0)"
+    fi
+    if [ "${NODE_MAJOR:-0}" -lt 22 ]; then
+        info "Installing Node.js v22 LTS (required for GitHub Copilot)..."
+        curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+    fi
+
+    # Install tree-sitter-cli (required by Neovim 0.12 nvim-treesitter main branch)
+    if ! command -v tree-sitter >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        info "Installing tree-sitter-cli via npm..."
+        sudo npm install -g tree-sitter-cli || npm install -g tree-sitter-cli
+    fi
 
     # Normalize Ubuntu/Debian binary names (fdfind -> fd, batcat -> bat)
     mkdir -p "$HOME/.local/bin"
@@ -201,13 +230,87 @@ link_file "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
 link_file "$DOTFILES_DIR/.tmux.conf" "$HOME/.tmux.conf"
 link_file "$DOTFILES_DIR/.config/nvim" "$HOME/.config/nvim"
 
-# Optional: Link lazygit config if you store one in your dotfiles
 if [ -e "$DOTFILES_DIR/.config/lazygit" ]; then
     link_file "$DOTFILES_DIR/.config/lazygit" "$HOME/.config/lazygit"
 fi
 
+# Ensure Termux Copilot native-watcher shim exists inside ~/.config/nvim
+SHIM_JS="$HOME/.config/nvim/copilot-shim.js"
+if [ -d "$HOME/.config/nvim" ] && [ ! -f "$SHIM_JS" ]; then
+    info "Creating Termux Copilot shim ($SHIM_JS)..."
+    cat << 'EOF_SHIM' > "$SHIM_JS"
+const Module = require("module");
+const os = require("os");
+
+const origCpus = os.cpus;
+os.cpus = function () {
+  const cpus = origCpus.apply(this, arguments);
+  if (Array.isArray(cpus) && cpus.length > 0) return cpus;
+  return [{ model: "ARM64", speed: 2000, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } }];
+};
+
+const mockWatcher = {
+  writeSnapshot: async () => "",
+  getEventsSince: async () => [],
+  subscribe: async () => ({ unsubscribe: async () => {} }),
+  unsubscribe: async () => {},
+  createWatcher: () => ({ on: () => {}, dispose: () => {} }),
+  Watcher: class { on() { return this; } close() {} dispose() {} },
+};
+
+const isNativeWatcher = (str) =>
+  typeof str === "string" &&
+  (str.includes("watcher.node") ||
+    str.includes("vscode-policy-watcher") ||
+    str.includes("@parcel/watcher") ||
+    str.includes("@vscode/policy-watcher") ||
+    str.includes("kerberos.node"));
+
+const origResolve = Module._resolveFilename;
+Module._resolveFilename = function (request, parent, isMain, options) {
+  if (isNativeWatcher(request)) return "copilot-native-shim";
+  try {
+    return origResolve.apply(this, arguments);
+  } catch (err) {
+    if (isNativeWatcher(request) || (typeof request === "string" && request.endsWith(".node"))) {
+      return "copilot-native-shim";
+    }
+    throw err;
+  }
+};
+
+const origLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  if (request === "copilot-native-shim" || isNativeWatcher(request)) return mockWatcher;
+  try {
+    return origLoad.apply(this, arguments);
+  } catch (err) {
+    if (isNativeWatcher(request) || (typeof request === "string" && request.endsWith(".node"))) {
+      return mockWatcher;
+    }
+    throw err;
+  }
+};
+
+const origDlopen = process.dlopen;
+process.dlopen = function (mod, filename) {
+  if (isNativeWatcher(filename)) {
+    mod.exports = mockWatcher;
+    return;
+  }
+  try {
+    return origDlopen.apply(this, arguments);
+  } catch (err) {
+    mod.exports = mockWatcher;
+    return;
+  }
+};
+EOF_SHIM
+    success "Created $SHIM_JS"
+fi
+
 # ==========================================
-# 6. Automated Plugin Bootstrapping
+# 6. Automated Plugin & Theme Bootstrapping
 # ==========================================
 echo ""
 info "Bootstrapping Tmux plugins via TPM..."
@@ -218,9 +321,27 @@ fi
 
 if command -v nvim >/dev/null 2>&1 && [ -e "$HOME/.config/nvim" ]; then
     echo ""
+    info "Preparing NvChad base46 cache directories..."
+    for CACHE_DIR in "$HOME/.local/share/nvim/base46" "$HOME/.local/share/nvim/nvchad/base46"; do
+        mkdir -p "$CACHE_DIR"
+        for FILE in defaults statusline devicons syntax treesitter lsp cmp git mason nvimtree tbline telescope whichkey; do
+            [ -f "$CACHE_DIR/$FILE" ] || touch "$CACHE_DIR/$FILE"
+        done
+    done
+
+    # Clear stale caches/locks and unpin nvim-treesitter so 0.11 and 0.12 pick their matching branch
+    rm -rf "$HOME/.cache/nvim/luac" "$HOME/.cache/tree-sitter/lock"
+    if [ -f "$HOME/.config/nvim/lazy-lock.json" ]; then
+        sed -i '/"nvim-treesitter":/d' "$HOME/.config/nvim/lazy-lock.json"
+    fi
+
     info "Syncing Neovim plugins headlessly (Lazy.nvim)..."
     nvim --headless "+Lazy! sync" +qa >/dev/null 2>&1 || true
     success "Neovim plugins synced."
+
+    info "Compiling NvChad base46 Gruvbox theme & syntax highlights..."
+    nvim --headless "+Lazy! load base46 ui" "+lua require('base46').load_all_highlights()" +qa >/dev/null 2>&1 || true
+    success "Gruvbox theme compiled."
 fi
 
 # ==========================================
@@ -231,3 +352,4 @@ echo -e "${GREEN}        Installation Complete!         ${NC}"
 echo -e "${BLUE}=======================================${NC}"
 echo -e "=> ${YELLOW}Next step 1:${NC} Run 'gh auth login' to authenticate GitHub CLI & Git credentials."
 echo -e "=> ${YELLOW}Next step 2:${NC} Run 'exec zsh' to enter your configured shell."
+
