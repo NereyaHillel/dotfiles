@@ -14,7 +14,7 @@ source "${ZINIT_HOME}/zinit.zsh"
 # -> STEP 1: Add extra completions to the system
 zinit light zsh-users/zsh-completions
 
-# -> STEP 2: Start the completion engine natively (This fixes the file/folder bug!)
+# -> STEP 2: Start the completion engine natively
 autoload -Uz compinit
 compinit
 zmodload zsh/complist
@@ -49,7 +49,7 @@ export DOTFILES="$HOME/.dotfiles"
 export PATH="$HOME/.mybin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 # Development Environment Setup
-eval "$(direnv hook zsh)"
+command -v direnv >/dev/null 2>&1 && eval "$(direnv hook zsh)"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # History settings
@@ -58,6 +58,7 @@ export SAVEHIST=10000
 export HISTFILE=~/.zsh_history
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
+setopt interactivecomments
 
 
 # ==========================
@@ -80,7 +81,7 @@ alias d=docker
 alias dc=docker-compose
 
 # Directory navigation
-unalias md 2>/dev/null
+unalias md 2>/dev/null || true
 md() { mkdir -p "$1" && cd "$1" }
 
 # Python virtual environments
@@ -124,8 +125,7 @@ mkproject() {
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# Background crond
-(pgrep -x "crond" >/dev/null || crond) &> /dev/null &
-
-export COPILOT_NODE_COMMAND="/data/data/com.termux/files/usr/bin/node"
-setopt interactivecomments
+# Start crond silently (daemonizes itself without '&')
+if command -v crond >/dev/null 2>&1 && ! pgrep -x "crond" >/dev/null 2>&1; then
+  crond >/dev/null 2>&1
+fi
