@@ -1,3 +1,6 @@
+# Gruvbox System Telemetry Banner (runs before P10k instant prompt)
+[[ -o interactive && -f "$HOME/.config/motd.zsh" ]] && source "$HOME/.config/motd.zsh"
+
 # Enable Powerlevel10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
